@@ -84,6 +84,42 @@ The SD card module shares **SPI1** with the camera — this is normal SPI bus be
 
 ---
 
+## Known issues and fixes
+
+### Linker error: `undefined reference to arducamSpiCsPinLow` / `arducamSpiCsPinHigh` / `arducamCsOutputMode`
+
+**Symptom** — compilation fails at the link stage with errors like:
+
+```
+ArducamCamera.c:(.text.cameraCsLow+0x2): undefined reference to `arducamSpiCsPinLow'
+ArducamCamera.c:(.text.cameraCsHigh+0x2): undefined reference to `arducamSpiCsPinHigh'
+ArducamCamera.c:(.text.cameraInit+0xa): undefined reference to `arducamCsOutputMode'
+```
+
+**Root cause** — `arducamSpiCsPinLow`, `arducamSpiCsPinHigh`, and `arducamCsOutputMode` are not real functions. They are macros defined in `src/Arducam/ArduinoHal.h` that alias them to the actual SPI helpers:
+
+```c
+#define arducamSpiCsPinHigh(pin)  arducamSpiCsHigh(pin)
+#define arducamSpiCsPinLow(pin)   arducamSpiCsLow(pin)
+#define arducamCsOutputMode(pin)  arducamSpiCsOutputMode(pin)
+```
+
+`src/Arducam/Platform.h` selects which HAL header to include based on preprocessor macros. The STMicroelectronics Arduino core defines `ARDUINO_ARCH_STM32`, but the upstream library only checked for `STM32F7xx && ARDUINO`, so no HAL was included and the macros were never defined.
+
+**Fix** — add `ARDUINO_ARCH_STM32` to the condition in `src/Arducam/Platform.h`:
+
+```c
+// Before
+#elif defined(__AVR__) || ... || (defined(STM32F7xx) && defined(ARDUINO))
+
+// After
+#elif defined(__AVR__) || ... || (defined(STM32F7xx) && defined(ARDUINO)) || defined(ARDUINO_ARCH_STM32)
+```
+
+This change has been applied to this copy of the library. If you update the library via the Arduino Library Manager, re-apply this one-line change to `src/Arducam/Platform.h`.
+
+---
+
 ## Dependencies
 
 | Library | Where to get |
